@@ -8,12 +8,10 @@ window.title = "Mini GTA 3D (Minecraft Edition)"
 window.borderless = False
 window.fps_counter.enabled = True
 
-# Небо и освещение
 Sky()
 DirectionalLight(y=10, z=5, shadows=True)
 AmbientLight(color=color.rgba(150, 150, 150, 0.5))
 
-# Асфальтовая земля (город)
 ground = Entity(
     model="plane",
     collider="box",
@@ -23,7 +21,6 @@ ground = Entity(
     texture_scale=(80, 80),
 )
 
-# Генерация кварталов и небоскрёбов в стиле Minecraft
 buildings = []
 building_colors = [color.light_gray, color.gray, color.azure, color.orange, color.brown]
 
@@ -44,7 +41,6 @@ for x in range(-60, 61, 24):
         buildings.append(b)
 
 
-# Класс машины
 class Car(Entity):
     def __init__(self, pos, car_color=color.red):
         super().__init__(
@@ -98,7 +94,6 @@ class Car(Entity):
         camera.look_at(self.position + Vec3(0, 1.5, 0))
 
 
-# Класс NPC (прохожие)
 class NPC(Entity):
     def __init__(self, pos):
         super().__init__(
@@ -131,39 +126,26 @@ class NPC(Entity):
             self.dir = -self.dir
 
 
-# Создаём игрока, машины и пешеходов
 player = FirstPersonController(position=(0, 2, 0), speed=8)
 player.cursor.color = color.red
 
-# --- 3D МОДЕЛЬ АК-47 В РУКЕ ---
 GUN_DEFAULT_POS = Vec3(0.42, -0.32, 0.75)
 wood_color = color.rgb(135, 75, 30)
 metal_color = color.rgb(38, 40, 44)
 
-# Корневой объект автомата (привязан к камере)
 gun = Entity(parent=camera, position=GUN_DEFAULT_POS, rotation=(0, -3, 0))
 
-# Ствольная коробка
 Entity(parent=gun, model="cube", position=(0, 0, 0), scale=(0.07, 0.11, 0.42), color=metal_color)
-# Крышка ствольной коробки
 Entity(parent=gun, model="cube", position=(0, 0.06, -0.02), scale=(0.065, 0.03, 0.38), color=color.rgb(50, 52, 58))
-# Деревянный приклад
 Entity(parent=gun, model="cube", position=(0, -0.035, -0.36), rotation=(10, 0, 0), scale=(0.06, 0.11, 0.34), color=wood_color)
-# Пистолетная рукоятка
 Entity(parent=gun, model="cube", position=(0, -0.11, -0.10), rotation=(-18, 0, 0), scale=(0.05, 0.14, 0.07), color=wood_color)
-# Деревянное цевьё
 Entity(parent=gun, model="cube", position=(0, 0.005, 0.33), scale=(0.068, 0.085, 0.26), color=wood_color)
-# Газовая трубка над цевьём
 Entity(parent=gun, model="cube", position=(0, 0.055, 0.32), scale=(0.04, 0.04, 0.24), color=metal_color)
-# Длинный ствол
 Entity(parent=gun, model="cube", position=(0, 0.02, 0.62), scale=(0.025, 0.025, 0.38), color=color.rgb(25, 25, 28))
-# Мушка на конце ствола
 Entity(parent=gun, model="cube", position=(0, 0.055, 0.76), scale=(0.015, 0.05, 0.02), color=metal_color)
-# Изогнутый магазин (рожковый)
 Entity(parent=gun, model="cube", position=(0, -0.14, 0.10), rotation=(16, 0, 0), scale=(0.052, 0.16, 0.09), color=color.rgb(45, 45, 50))
 Entity(parent=gun, model="cube", position=(0, -0.27, 0.15), rotation=(32, 0, 0), scale=(0.052, 0.16, 0.09), color=color.rgb(45, 45, 50))
 
-# Вспышка при выстреле
 muzzle_flash = Entity(
     parent=gun,
     model="sphere",
@@ -190,7 +172,6 @@ money = 0
 wanted = 0
 fire_cooldown = 0.0
 
-# Интерфейс (HUD)
 hud_text = Text(
     text="$ 0   |   Wanted: 0*",
     position=(-0.85, 0.45),
@@ -215,9 +196,8 @@ def shoot():
     if current_car or fire_cooldown > 0:
         return
 
-    fire_cooldown = 0.11  # Скорострельность АК-47
-
-    # Вспышка и отдача автомата
+    fire_cooldown = 0.11  
+    
     muzzle_flash.enabled = True
     invoke(setattr, muzzle_flash, "enabled", False, delay=0.04)
     gun.position = GUN_DEFAULT_POS + Vec3(0, 0.02, -0.08)
@@ -225,7 +205,6 @@ def shoot():
     gun.animate_position(GUN_DEFAULT_POS, duration=0.09)
     gun.animate_rotation_x(0, duration=0.09)
 
-    # Луч попадания прямо по прицелу
     hit_info = raycast(camera.world_position, camera.forward, distance=75, ignore=[player, gun])
     if hit_info.hit and isinstance(hit_info.entity, NPC):
         destroy(hit_info.entity)
@@ -241,7 +220,6 @@ def input(key):
     if key == "left mouse down":
         shoot()
 
-    # Угон / выход из машины на F
     if key == "f":
         if current_car:
             player.position = current_car.position + current_car.right * 3 + Vec3(0, 1, 0)
@@ -271,11 +249,9 @@ def update():
     if fire_cooldown > 0:
         fire_cooldown -= time.dt
 
-    # Стрельба очередью при зажатой ЛКМ
     if held_keys["left mouse"] and not current_car:
         shoot()
 
-    # Если игрок за рулём и сбивает пешехода
     if current_car and abs(current_car.speed) > 4:
         for npc in npcs[:]:
             if distance(current_car.position, npc.position) < 3.2:
