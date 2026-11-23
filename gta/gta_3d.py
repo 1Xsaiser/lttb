@@ -113,8 +113,48 @@ class NPC(Entity):
         )
         self.dir = Vec3(random.uniform(-1, 1), 0, random.uniform(-1, 1)).normalized()
         self.timer = random.uniform(1, 4)
+        self.is_dead = False
+        self.death_timer = 0.0
+        self.fall_axis = random.choice(["x", "z"])
+        self.fall_sign = random.choice([-1, 1])
+        self.knockback = Vec3(0, 0, 0)
+
+    def die(self, hit_dir=None):
+        if self.is_dead:
+            return
+        self.is_dead = True
+        self.collider = None
+        self.color = color.rgb(190, 45, 45)
+        if self.head and not self.head.is_empty():
+            self.head.color = color.rgb(210, 90, 90)
+        if hit_dir is not None:
+            flat_dir = Vec3(hit_dir.x, 0, hit_dir.z)
+            if flat_dir.length() > 0.01:
+                self.knockback = flat_dir.normalized() * 6.5
 
     def update(self):
+        if self.is_dead:
+            self.death_timer += time.dt
+
+            # Плавное заваливание на землю
+            if self.fall_axis == "x":
+                self.rotation_x = lerp(self.rotation_x, 90 * self.fall_sign, time.dt * 9)
+            else:
+                self.rotation_z = lerp(self.rotation_z, 90 * self.fall_sign, time.dt * 9)
+
+            self.y = lerp(self.y, 0.45, time.dt * 9)
+
+            # Небольшое отбрасывание при ударе с затуханием
+            if self.knockback.length() > 0.05:
+                self.position += self.knockback * time.dt
+                self.knockback = lerp(self.knockback, Vec3(0, 0, 0), time.dt * 7)
+
+            if self.death_timer >= 2.5:
+                if self in npcs:
+                    npcs.remove(self)
+                destroy(self)
+            return
+
         self.timer -= time.dt
         if self.timer <= 0:
             self.dir = Vec3(random.uniform(-1, 1), 0, random.uniform(-1, 1)).normalized()
@@ -248,7 +288,6 @@ def create_weapon_parts(parent_obj, w_key, parts_list=None):
         add_part(model="cube", position=(0, 0.055, 0.76), scale=(0.015, 0.05, 0.02), color=metal_color)
         add_part(model="cube", position=(0, -0.14, 0.10), rotation=(16, 0, 0), scale=(0.052, 0.16, 0.09), color=color.rgb(45, 45, 50))
         add_part(model="cube", position=(0, -0.27, 0.15), rotation=(32, 0, 0), scale=(0.052, 0.16, 0.09), color=color.rgb(45, 45, 50))
-
     elif w_key == "sniper":
         sniper_green = color.rgb(65, 92, 55)
         add_part(model="cube", position=(0, -0.01, 0.05), scale=(0.075, 0.10, 0.58), color=sniper_green)
@@ -262,8 +301,6 @@ def create_weapon_parts(parent_obj, w_key, parts_list=None):
         add_part(model="cube", position=(0, 0.115, 0.12), scale=(0.058, 0.058, 0.38), color=dark_metal)
         add_part(model="cube", position=(0, 0.115, 0.32), scale=(0.068, 0.068, 0.07), color=metal_color)
         add_part(model="cube", position=(0, 0.115, -0.072), scale=(0.045, 0.045, 0.01), color=color.cyan)
-
-
 def build_weapon_model(w_key):
     global gun_parts, muzzle_flash, GUN_DEFAULT_POS
 
@@ -460,8 +497,10 @@ def handle_weapon_click(w_key):
             shop_status_text.text = f"Недостаточно средств! Не хватает $ {need}"
             shop_status_text.color = color.rgb(240, 80, 80)
 
+
 for idx, w_key in enumerate(WEAPON_ORDER):
-    w = WEAPONS[w_key]
+
+        w = WEAPONS[w_key]
 cx, cy = w["ui_pos"]
 slot_num = idx + 1
 card_btn = Button(
@@ -572,33 +611,25 @@ refresh_shop_ui()
 def update_hud():
     w_name = WEAPONS[current_weapon_key]["name"]
     hud_text.text = f"$ {money}   |   Wanted: {wanted}*   |   Оружие: {w_name}"
-
-
 def shoot():
     global money, wanted, fire_cooldown
     if current_car or shop_open or fire_cooldown > 0:
         return
-
-    w = WEAPONS[current_weapon_key]
-    fire_cooldown = w["cooldown"]
-
-    if muzzle_flash and not muzzle_flash.is_empty():
-        muzzle_flash.enabled = True
-        invoke(hide_flash, muzzle_flash, delay=0.04)
-
-    gun.position = GUN_DEFAULT_POS + Vec3(0, 0.02, -0.08)
-    gun.rotation_x = -4
-    gun.animate_position(GUN_DEFAULT_POS, duration=0.09)
-    gun.animate_rotation_x(0, duration=0.09)
-
-    hit_info = raycast(camera.world_position, camera.forward, distance=w["range"], ignore=[player, gun])
-    if hit_info.hit and isinstance(hit_info.entity, NPC):
-        destroy(hit_info.entity)
-        npcs.remove(hit_info.entity)
-        money += w["reward"]
-        wanted = min(5, wanted + 1)
-        update_hud()
-
+w = WEAPONS[current_weapon_key]
+fire_cooldown = w["cooldown"]
+if muzzle_flash and not muzzle_flash.is_empty():
+    muzzle_flash.enabled = True
+invoke(hide_flash, muzzle_flash, delay=0.04)
+gun.position = GUN_DEFAULT_POS + Vec3(0, 0.02, -0.08)
+gun.rotation_x = -4
+gun.animate_position(GUN_DEFAULT_POS, duration=0.09)
+gun.animate_rotation_x(0, duration=0.09)
+hit_info = raycast(camera.world_position, camera.forward, distance=w["range"], ignore=[player, gun])
+if hit_info.hit and isinstance(hit_info.entity, NPC) and not hit_info.entity.is_dead:
+    hit_info.entity.die(camera.forward)
+money += w["reward"]
+wanted = min(5, wanted + 1)
+update_hud()
 def input(key):
     global current_car, wanted
 
@@ -662,9 +693,8 @@ def update():
 
     if current_car and abs(current_car.speed) > 4:
         for npc in npcs[:]:
-            if distance(current_car.position, npc.position) < 3.2:
-                destroy(npc)
-                npcs.remove(npc)
+            if not npc.is_dead and distance(current_car.position, npc.position) < 3.2:
+                npc.die(current_car.forward * (1 if current_car.speed > 0 else -1))
                 money += 50
                 wanted = min(5, wanted + 1)
                 update_hud()
@@ -674,6 +704,5 @@ build_weapon_model(current_weapon_key)
 refresh_shop_ui()
 
 app.run()
-
 
 app.run()
